@@ -56,10 +56,10 @@ class MatchmakerService {
         model: 'gemini-1.5-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(
-          temperature: 0.3,
+          temperature: 0.4,
           topK: 1,
           topP: 1,
-          maxOutputTokens: 300,
+          maxOutputTokens: 500,
         ),
       );
     }
@@ -242,37 +242,48 @@ class MatchmakerService {
 
   /// Builds the AI prompt for matching analysis
   static String _buildMatchingPrompt(UserProfile user1, UserProfile user2) {
+    // Find actual shared interests
+    final sharedInterests = user1.interests
+        .where((interest) => user2.interests.contains(interest))
+        .toList();
+    
     return '''
 Analyze the compatibility between these two users for a networking app:
 
-USER 1:
-- Name: ${user1.name}
+USER 1 (${user1.name}):
 - Age: ${user1.age}
 - Bio: "${user1.bio}"
 - Interests: ${user1.interests.join(', ')}
 
-USER 2:
-- Name: ${user2.name}
+USER 2 (${user2.name}):
 - Age: ${user2.age}
 - Bio: "${user2.bio}"
 - Interests: ${user2.interests.join(', ')}
 
-Please analyze their compatibility based on:
-1. Shared interests and hobbies
-2. Complementary personality traits from their bios
-3. Age compatibility
-4. Lifestyle alignment
-5. Conversation potential
+SHARED INTERESTS FOUND: ${sharedInterests.isNotEmpty ? sharedInterests.join(', ') : 'None'}
+
+Provide a detailed compatibility analysis that MUST mention:
+1. Specific shared interests by name (if any)
+2. Age compatibility (${user1.age} and ${user2.age} years old)
+3. Specific personality traits or activities from their bios
+4. Why they would have good conversations
 
 Respond in this exact JSON format:
 {
   "isMatch": true/false,
   "compatibilityScore": 0.85,
-  "reasoning": "Brief explanation of why they are/aren't compatible",
+  "reasoning": "Detailed explanation mentioning specific shared interests, age compatibility, and bio similarities",
   "commonInterests": ["interest1", "interest2"]
 }
 
-Keep reasoning under 25 characters. Score should be 0.0-1.0. Only include actual common interests. Be generous with the score.
+IMPORTANT: 
+- Reasoning should be 80-120 characters and mention SPECIFIC similarities
+- If they share interests, mention them by name: "Both love hiking and photography"
+- If ages are close, mention it: "Similar ages (25 & 27)"
+- Reference specific bio content when possible
+- Score 0.7+ if they share 2+ interests or have very compatible bios
+- Score 0.8+ if they share 3+ interests and compatible ages
+- Only include actual shared interests in commonInterests array
 ''';
   }
 
