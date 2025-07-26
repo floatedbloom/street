@@ -145,116 +145,35 @@ class MatchmakerService {
   /// Gets all matches for a specific user
   static Future<List<Map<String, dynamic>>> getUserMatches(String userId) async {
     try {
+      // First get the basic matches
       final matches = await _supabase
           .from('matches')
-          .select('''
-            *,
-            user1:user_id_1(name, bio),
-            user2:user_id_2(name, bio)
-          ''')
+          .select('*')
           .or('user_id_1.eq.$userId,user_id_2.eq.$userId')
           .order('matched_at', ascending: false);
 
-      // Fetch phone numbers from auth.users table
+      // Then manually fetch user data for each match
       for (var match in matches) {
-        try {
-          final user1Id = match['user_id_1'];
-          final user2Id = match['user_id_2'];
-          
-          // Try to get phone numbers using a custom SQL function or direct query
-          try {
-            // Attempt RPC function first (if exists)
-            final phoneData = await _supabase.rpc('get_user_phones', params: {
-              'user_ids': [user1Id, user2Id]
-            });
+        final user1Id = match['user_id_1'];
+        final user2Id = match['user_id_2'];
+        
+        // Fetch user1 data
+        final user1Data = await _supabase
+            .from('people')
+            .select('name, phone, bio')
+            .eq('id', user1Id)
+            .maybeSingle();
             
-            if (phoneData is List) {
-              // Add phone numbers from RPC result
-              if (match['user1'] != null) {
-                final user1Phone = phoneData.firstWhere(
-                  (p) => p['id'] == user1Id, 
-                  orElse: () => {'phone': null}
-                )['phone'];
-                match['user1']['phone'] = user1Phone ?? 'Not available';
-              }
-              
-              if (match['user2'] != null) {
-                final user2Phone = phoneData.firstWhere(
-                  (p) => p['id'] == user2Id, 
-                  orElse: () => {'phone': null}
-                )['phone'];
-                match['user2']['phone'] = user2Phone ?? 'Not available';
-              }
-            }
-          } catch (rpcError) {
-            // Fallback: Try direct auth.users query (may require row level security setup)
-            try {
-              final authUsers = await _supabase
-                  .from('auth.users')
-                  .select('id, phone')
-                                     .inFilter('id', [user1Id, user2Id]);
-              
-              if (match['user1'] != null) {
-                final user1Data = authUsers.firstWhere(
-                  (u) => u['id'] == user1Id,
-                  orElse: () => {'phone': null}
-                );
-                match['user1']['phone'] = user1Data['phone'] ?? 'Not available';
-              }
-              
-              if (match['user2'] != null) {
-                final user2Data = authUsers.firstWhere(
-                  (u) => u['id'] == user2Id,
-                  orElse: () => {'phone': null}
-                );
-                match['user2']['phone'] = user2Data['phone'] ?? 'Not available';
-              }
-            } catch (authError) {
-              // Final fallback: Use current user's own phone if they're one of the matched users
-              final currentUser = _supabase.auth.currentUser;
-              if (currentUser != null) {
-                if (match['user1'] != null && user1Id == currentUser.id) {
-                  match['user1']['phone'] = currentUser.phone ?? 'Not available';
-                  // For the other user, we can't get their phone
-                  if (match['user2'] != null) {
-                    match['user2']['phone'] = 'Contact through app';
-                  }
-                } else if (match['user2'] != null && user2Id == currentUser.id) {
-                  match['user2']['phone'] = currentUser.phone ?? 'Not available';
-                  // For the other user, we can't get their phone
-                  if (match['user1'] != null) {
-                    match['user1']['phone'] = 'Contact through app';
-                  }
-                } else {
-                  // Neither user is current user, can't access phones
-                  if (match['user1'] != null) {
-                    match['user1']['phone'] = 'Contact through app';
-                  }
-                  if (match['user2'] != null) {
-                    match['user2']['phone'] = 'Contact through app';
-                  }
-                }
-              } else {
-                // No current user, set generic message
-                if (match['user1'] != null) {
-                  match['user1']['phone'] = 'Not available';
-                }
-                if (match['user2'] != null) {
-                  match['user2']['phone'] = 'Not available';
-                }
-              }
-            }
-          }
-        } catch (e) {
-          print('Error fetching phone numbers for match: $e');
-          // Set fallback values
-          if (match['user1'] != null) {
-            match['user1']['phone'] = 'Not available';
-          }
-          if (match['user2'] != null) {
-            match['user2']['phone'] = 'Not available';
-          }
-        }
+        // Fetch user2 data  
+        final user2Data = await _supabase
+            .from('people')
+            .select('name, phone, bio')
+            .eq('id', user2Id)
+            .maybeSingle();
+            
+        // Add user data to match
+        match['user1'] = user1Data ?? {'name': 'User Not Found', 'phone': 'Missing profile', 'bio': {}};
+        match['user2'] = user2Data ?? {'name': 'User Not Found', 'phone': 'Missing profile', 'bio': {}};
       }
 
       return List<Map<String, dynamic>>.from(matches);
