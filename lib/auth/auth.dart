@@ -1,8 +1,21 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:logger/logger.dart';
 
 class Auth {
   final GoTrueClient _auth = Supabase.instance.client.auth;
+  
+  static final Logger _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 0,
+      errorMethodCount: 8,
+      lineLength: 120,
+      colors: true,
+      printEmojis: true,
+      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
+    ),
+  );
+  
   static Future<void> intialize() async {
     await dotenv.load();
     await Supabase.initialize(
@@ -69,7 +82,7 @@ class Auth {
       }
     } catch (e) {
       // Don't throw error here - login should still succeed even if phone save fails
-      print('Warning: Could not save phone to people table: $e');
+      _logger.w('⚠️ Warning: Could not save phone to people table: $e');
     }
   }
 

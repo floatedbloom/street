@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:logger/logger.dart';
 
 class Captcha extends StatefulWidget {
   final Function(String) onCompleted;
@@ -22,6 +23,17 @@ class _CaptchaState extends State<Captcha> {
   late final WebViewController _controller;
   bool _isLoading = true;
   bool _hasError = false;
+  
+  static final Logger _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 0,
+      errorMethodCount: 8,
+      lineLength: 120,
+      colors: true,
+      printEmojis: true,
+      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
+    ),
+  );
 
   @override
   void initState() {
@@ -47,7 +59,7 @@ class _CaptchaState extends State<Captcha> {
       ..addJavaScriptChannel(
         'Captcha',
         onMessageReceived: (JavaScriptMessage message) {
-          print('Embedded captcha completed: ${message.message}');
+          _logger.i('✅ Embedded captcha completed: ${message.message}');
           widget.onCompleted(message.message);
         },
       )
@@ -69,7 +81,7 @@ class _CaptchaState extends State<Captcha> {
             }
           },
           onWebResourceError: (WebResourceError error) {
-            print('Embedded captcha error: ${error.description}');
+            _logger.e('❌ Embedded captcha error: ${error.description}');
             if (mounted) {
               setState(() {
                 _isLoading = false;
