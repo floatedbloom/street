@@ -1,0 +1,30 @@
+name: street
+description: "No more cold approaches."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  dart_jsonwebtoken: ^3.2.0
+  flutter_secure_storage: ^9.2.4
+  supabase_flutter: ^2.9.1
+  shared_preferences: ^2.5.3
+  flutter_dotenv: ^5.1.0
+  intl_phone_field: ^3.2.0
+  google_sign_in: ^7.1.0
+  webview_flutter: ^4.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
