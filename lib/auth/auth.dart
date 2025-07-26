@@ -25,15 +25,51 @@ class Auth {
 
   Future<void> verify(String phone, String otp) async {
     try {
-      await _auth.verifyOTP(
+      final response = await _auth.verifyOTP(
         phone: phone,
         token: otp,
         type: OtpType.sms,
       );
+
+      // After successful verification, save phone to people table
+      final user = response.user;
+      if (user != null) {
+        await _savePhoneToPeopleTable(user.id, phone);
+      }
     } on AuthException catch (e) {
       throw Exception('Verification failed: ${e.message}');
     } catch (e) {
       throw Exception('Unexpected error: $e');
+    }
+  }
+
+  Future<void> _savePhoneToPeopleTable(String userId, String phone) async {
+    try {
+      final supabase = Supabase.instance.client;
+      
+      // Check if user profile exists
+      final existingProfile = await supabase
+          .from('people')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (existingProfile == null) {
+        // Create new profile with phone number
+        await supabase.from('people').insert({
+          'id': userId,
+          'phone': phone,
+          'bio': <String, dynamic>{},
+        });
+      } else {
+        // Update existing profile with phone number
+        await supabase.from('people').update({
+          'phone': phone,
+        }).eq('id', userId);
+      }
+    } catch (e) {
+      // Don't throw error here - login should still succeed even if phone save fails
+      print('Warning: Could not save phone to people table: $e');
     }
   }
 

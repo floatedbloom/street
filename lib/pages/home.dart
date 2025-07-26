@@ -213,7 +213,7 @@ class HomeState extends State<Home> {
                       .maybeSingle();
 
                   if (existingProfile == null) {
-                    // Insert new profile
+                    // Insert new profile (phone will be set by auth system)
                     await supabase.from('people').insert({
                       'id': user.id,
                       'name': '$firstName $lastName',
@@ -224,7 +224,7 @@ class HomeState extends State<Home> {
                       }
                     });
                   } else {
-                    // Update existing profile
+                    // Update existing profile (preserve existing phone)
                     final currentBio = existingProfile['bio'] as Map<String, dynamic>? ?? {};
                     await supabase.from('people').update({
                       'name': '$firstName $lastName',
@@ -551,7 +551,9 @@ class HomeState extends State<Home> {
                         ),
                       const SizedBox(height: 32),
                       
-                      Center(
+                                            Padding(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: Center(
                           child: ElevatedButton(
                             onPressed: () async {
                               try {
@@ -595,6 +597,7 @@ class HomeState extends State<Home> {
                           ),
                         ),
                       ),
+                    ),
                     ],
                   ),
                 ),
