@@ -19,6 +19,7 @@ class GeoService {
   
   static StreamSubscription<Position>? _positionStream;
   static Function(List<dynamic>)? _proximityCallback;
+  static Function()? _onNewMatchCallback;
   static String? _currentUserId;
   static UserProfile? _currentUserProfile;
   static SupabaseClient get _supabase => Supabase.instance.client;
@@ -54,6 +55,7 @@ class GeoService {
     required Function(List<dynamic>) onNearbyUsers,
     required String userId,
     required UserProfile userProfile,
+    Function()? onNewMatch,
   }) async {
     _logger.i('🚀 Starting background location tracking with matchmaking...');
     
@@ -78,15 +80,9 @@ class GeoService {
     }
     
     _proximityCallback = onNearbyUsers;
+    _onNewMatchCallback = onNewMatch;
     _currentUserId = userId;
     _currentUserProfile = userProfile;
-    
-    // Initialize notifications
-    try {
-      await NotificationService.initialize();
-    } catch (e) {
-      _logger.w('⚠️ Failed to initialize notifications: $e');
-    }
     
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -112,6 +108,7 @@ class GeoService {
     _positionStream?.cancel();
     _positionStream = null;
     _proximityCallback = null;
+    _onNewMatchCallback = null;
     _currentUserId = null;
     _currentUserProfile = null;
     _logger.i('✅ Background tracking stopped');
@@ -270,6 +267,12 @@ class GeoService {
           );
         } catch (e) {
           _logger.e('❌ Failed to send match notification: $e');
+        }
+        
+        // Trigger new match callback to reload page
+        if (_onNewMatchCallback != null) {
+          _logger.i('🔄 Triggering page reload for new match...');
+          _onNewMatchCallback!();
         }
       } else {
         _logger.d('❌ No match with ${nearbyUserProfile.name} (${(matchResult.compatibilityScore * 100).toStringAsFixed(1)}%)');

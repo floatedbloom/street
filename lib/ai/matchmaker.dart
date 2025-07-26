@@ -272,7 +272,7 @@ Respond in this exact JSON format:
   "commonInterests": ["interest1", "interest2"]
 }
 
-Keep reasoning under 25 characters. Score should be 0.0-1.0. Only include actual common interests.
+Keep reasoning under 25 characters. Score should be 0.0-1.0. Only include actual common interests. Be generous with the score.
 ''';
   }
 

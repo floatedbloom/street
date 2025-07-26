@@ -18,11 +18,18 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications = 
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
+  static bool _initializing = false;
+  static final Set<String> _sentMatchNotifications = <String>{};
 
   /// Initialize the notification service
   static Future<void> initialize() async {
     if (_initialized) return;
+    if (_initializing) {
+      _logger.w('⚠️ Notification service already initializing, skipping...');
+      return;
+    }
 
+    _initializing = true;
     _logger.i('🔔 Initializing notification service...');
 
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -42,21 +49,45 @@ class NotificationService {
       macOS: initializationSettingsIOS,
     );
 
-    await _notifications.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
+    try {
+      await _notifications.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: _onNotificationTapped,
+      );
+      _logger.i('📱 Notification plugin initialized');
 
-    // Request permissions for iOS
-    await _requestPermissions();
+      // Request permissions (important for Android 13+)
+      await _requestPermissions();
 
-    _initialized = true;
-    _logger.i('✅ Notification service initialized');
+      // Check if notifications are enabled (without sending test)
+      final bool? enabled = await areNotificationsEnabled();
+      _logger.i('📊 Notifications enabled: $enabled');
+
+      _initialized = true;
+      _logger.i('✅ Notification service fully initialized');
+    } catch (e) {
+      _logger.e('❌ Failed to initialize notifications: $e');
+      _initializing = false;
+      rethrow;
+    } finally {
+      _initializing = false;
+    }
   }
 
-  /// Request notification permissions (iOS)
+
+
+  /// Request notification permissions (iOS & Android)
   static Future<void> _requestPermissions() async {
-    final bool? result = await _notifications
+    // Request Android permissions (Android 13+)
+    final bool? androidResult = await _notifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+
+    _logger.d('🤖 Android notification permission: $androidResult');
+
+    // Request iOS permissions
+    final bool? iosResult = await _notifications
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(
@@ -74,7 +105,7 @@ class NotificationService {
           sound: true,
         );
 
-    _logger.d('📱 iOS notification permission: $result');
+    _logger.d('📱 iOS notification permission: $iosResult');
     _logger.d('💻 macOS notification permission: $macResult');
   }
 
@@ -90,11 +121,29 @@ class NotificationService {
     required double compatibilityScore,
     required String reasoning,
   }) async {
+    // Create a unique key for this match to prevent duplicates
+    final String matchKey = '$matchedUserName:${compatibilityScore.toStringAsFixed(2)}';
+    
+    if (_sentMatchNotifications.contains(matchKey)) {
+      _logger.w('⚠️ Notification for $matchedUserName already sent, skipping duplicate');
+      return;
+    }
+
+    _logger.i('🔔 Starting match notification process for $matchedUserName');
+
     if (!_initialized) {
+      _logger.w('⚠️ Notification service not initialized, initializing now...');
       await initialize();
     }
 
-    _logger.i('🔔 Sending match notification for $matchedUserName');
+    // Check if notifications are enabled
+    final bool enabled = await areNotificationsEnabled();
+    _logger.i('📊 Notifications enabled: $enabled');
+
+    if (!enabled) {
+      _logger.w('⚠️ Notifications are disabled by user or system');
+      return;
+    }
 
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'matches_channel',
@@ -112,6 +161,8 @@ class NotificationService {
       ledColor: Color(0xFF6750A4),
       ledOnMs: 1000,
       ledOffMs: 500,
+      autoCancel: true,
+      ongoing: false,
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -129,20 +180,36 @@ class NotificationService {
     );
 
     final String title = '🎉 New Match Found!';
-    final String body = 'You matched with $matchedUserName (${(compatibilityScore * 100).toStringAsFixed(0)}% compatible)';
+    final String body = 'You matched with $matchedUserName';
+    final int notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    _logger.i('📤 Attempting to show notification - ID: $notificationId, Title: $title');
 
     try {
       await _notifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
+        notificationId,
         title,
         body,
         notificationDetails,
         payload: 'match:$matchedUserName:$compatibilityScore',
       );
 
-      _logger.i('✅ Match notification sent successfully');
+      _logger.i('✅ Match notification sent successfully with ID: $notificationId');
+      
+      // Mark this match as notified to prevent duplicates
+      _sentMatchNotifications.add(matchKey);
+      
+      // Keep cache size reasonable (max 100 notifications)
+      if (_sentMatchNotifications.length > 100) {
+        final List<String> toRemove = _sentMatchNotifications.take(50).toList();
+        _sentMatchNotifications.removeAll(toRemove);
+        _logger.d('🧹 Cleaned notification cache, removed ${toRemove.length} old entries');
+      }
+      
     } catch (e) {
       _logger.e('❌ Failed to send match notification: $e');
+      _logger.e('Stack trace: ${StackTrace.current}');
+      rethrow;
     }
   }
 

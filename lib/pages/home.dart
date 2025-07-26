@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:logger/logger.dart';
 import '../ai/matchmaker.dart';
@@ -78,6 +79,22 @@ class HomeState extends State<Home> {
         _logger.i('🎯 Home: Found ${nearbyUsers.length} nearby users');
         for (var user in nearbyUsers) {
           _logger.d('👤 User data: $user');
+        }
+      },
+      onNewMatch: () {
+        _logger.i('🔄 New match detected! Reloading matches...');
+        // Reload matches when a new match is found
+        _loadMatches();
+        
+        // Show a quick snackbar notification
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 New match found! Check your matches below.'),
+              duration: Duration(seconds: 3),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       },
     );
@@ -661,12 +678,46 @@ class HomeState extends State<Home> {
                                         subtitle: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              'Phone: $otherUserPhone',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    'Phone: $otherUserPhone',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (otherUserPhone != 'No phone number')
+                                                  Material(
+                                                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    child: InkWell(
+                                                      onTap: () async {
+                                                        await Clipboard.setData(ClipboardData(text: otherUserPhone));
+                                                        if (context.mounted) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text('📞 Phone number copied: $otherUserPhone'),
+                                                              duration: const Duration(seconds: 2),
+                                                              backgroundColor: Colors.blue,
+                                                            ),
+                                                          );
+                                                        }
+                                                      },
+                                                      borderRadius: BorderRadius.circular(20),
+                                                      child: Padding(
+                                                        padding: const EdgeInsets.all(8.0),
+                                                        child: Icon(
+                                                          Icons.copy,
+                                                          size: 18,
+                                                          color: Theme.of(context).colorScheme.primary,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                             if (otherUserBio != 'No bio available')
                                               Text(
