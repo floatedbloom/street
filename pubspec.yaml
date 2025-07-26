@@ -18,6 +18,7 @@ dependencies:
   intl_phone_field: ^3.2.0
   google_sign_in: ^7.1.0
   webview_flutter: ^4.9.0
+  google_generative_ai: ^0.4.7
 
 dev_dependencies:
   flutter_test:

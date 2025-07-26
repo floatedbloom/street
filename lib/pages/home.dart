@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../ai/matchmaker.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -18,7 +19,9 @@ class HomeState extends State<Home> {
   String _userName = '';
   String _userAge = '';
   bool _isLoading = true;
-
+  bool _isLoadingMatches = false;
+  List<Map<String, dynamic>> _matches = [];
+  
   final supabase = Supabase.instance.client;
 
   @override
@@ -68,11 +71,31 @@ class HomeState extends State<Home> {
             }
             _isLoading = false;
           });
+          
+          // Load matches after profile is loaded
+          _loadMatches();
         }
       }
     } catch (e) {
       print('Error loading profile: $e');
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadMatches() async {
+    setState(() => _isLoadingMatches = true);
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final matches = await MatchmakerService.getUserMatches(user.id);
+      setState(() {
+        _matches = matches;
+        _isLoadingMatches = false;
+      });
+    } catch (e) {
+      print('Error loading matches: $e');
+      setState(() => _isLoadingMatches = false);
     }
   }
 
@@ -174,14 +197,21 @@ class HomeState extends State<Home> {
                     }).eq('id', user.id);
                   }
 
+                  // Set the data directly instead of reloading from database
+                  setState(() {
+                    _userName = '$firstName $lastName';
+                    _userAge = age;
+                    _isLoading = false;
+                  });
+
                   firstNameController.dispose();
                   lastNameController.dispose();
                   ageController.dispose();
 
                   Navigator.of(context).pop();
 
-                  // Reload profile data after dialog closes
-                  _loadUserProfile();
+                  // Load matches after successful profile setup
+                  _loadMatches();
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error saving profile: $e')),
@@ -348,10 +378,142 @@ class HomeState extends State<Home> {
                             ),
                             child: const Text('Add'),
                           ),
+                                                ],
+                      ),
+                      const SizedBox(height: 32),
+                      
+                      // Matches section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Your Matches',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (_matches.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                '${_matches.length}',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 44),
-                                              Center(
+                      const SizedBox(height: 16),
+                      
+                      // Matches list
+                      if (_isLoadingMatches)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (_matches.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceVariant.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'No matches yet.',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          height: 200,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListView.builder(
+                            itemCount: _matches.length,
+                            itemBuilder: (context, index) {
+                              final match = _matches[index];
+                              final user = supabase.auth.currentUser;
+                              
+                              // Determine which user profile to show (not the current user)
+                              final isUser1 = match['user_id_1'] == user?.id;
+                              final otherUser = isUser1 ? match['user2'] : match['user1'];
+                              final otherUserName = otherUser?['name'] ?? 'Unknown User';
+                              final otherUserPhone = otherUser?['phone'] ?? 'No phone number';
+                              
+                              return Card(
+                                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: Theme.of(context).colorScheme.primary,
+                                    child: Text(
+                                      otherUserName.isNotEmpty ? otherUserName[0].toUpperCase() : '?',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onPrimary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    otherUserName,
+                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        match['ai_reasoning'] ?? 'No reason provided',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.phone,
+                                            size: 16,
+                                            color: Theme.of(context).colorScheme.secondary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            otherUserPhone,
+                                            style: TextStyle(
+                                              color: Theme.of(context).colorScheme.secondary,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  isThreeLine: true,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      const SizedBox(height: 32),
+                      
+                      Center(
                           child: ElevatedButton(
                             onPressed: () async {
                               try {
@@ -372,6 +534,9 @@ class HomeState extends State<Home> {
                                     duration: Duration(seconds: 2),
                                   ),
                                 );
+                                
+                                // Reload matches after profile update
+                                _loadMatches();
                               } catch (e) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('Error saving: $e')),
