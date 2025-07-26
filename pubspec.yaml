@@ -20,6 +20,7 @@ dependencies:
   webview_flutter: ^4.9.0
   geolocator: ^14.0.2
   google_generative_ai: ^0.4.7
+  logger: ^2.4.0
 
 dev_dependencies:
   flutter_test:

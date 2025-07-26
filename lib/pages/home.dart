@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:logger/logger.dart';
 import '../ai/matchmaker.dart';
+import '../geo/geo.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -10,6 +12,17 @@ class Home extends StatefulWidget {
 }
 
 class HomeState extends State<Home> {
+  final Logger _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 0,
+      errorMethodCount: 5,
+      lineLength: 120,
+      colors: true,
+      printEmojis: true,
+      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
+    ),
+  );
+  
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _interestController = TextEditingController();
   
@@ -21,6 +34,7 @@ class HomeState extends State<Home> {
   bool _isLoading = true;
   bool _isLoadingMatches = false;
   List<Map<String, dynamic>> _matches = [];
+  List<dynamic> _nearbyUsers = [];
   
   final supabase = Supabase.instance.client;
 
@@ -28,13 +42,37 @@ class HomeState extends State<Home> {
   void initState() {
     super.initState();
     _loadUserProfile();
+    _startLocationTracking();
   }
 
   @override
   void dispose() {
     _bioController.dispose();
     _interestController.dispose();
+    GeoService.stopBackgroundTracking();
     super.dispose();
+  }
+
+  Future<void> _startLocationTracking() async {
+    _logger.i('🏠 Starting location tracking from Home page...');
+    
+    bool started = await GeoService.startBackgroundTracking(
+      onNearbyUsers: (nearbyUsers) {
+        setState(() {
+          _nearbyUsers = nearbyUsers;
+        });
+        _logger.i('🎯 Home: Found ${nearbyUsers.length} nearby users');
+        for (var user in nearbyUsers) {
+          _logger.d('👤 User data: $user');
+        }
+      },
+    );
+    
+    if (started) {
+      _logger.i('✅ Location tracking started successfully from Home');
+    } else {
+      _logger.e('❌ Failed to start location tracking - check permissions');
+    }
   }
 
   Future<void> _loadUserProfile() async {
