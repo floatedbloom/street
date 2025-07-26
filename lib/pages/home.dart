@@ -94,19 +94,21 @@ class HomeState extends State<Home> {
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      final response = await supabase
-          .from('people')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
+      // Use the get_user_data RPC function instead of direct table query
+      final response = await supabase.rpc('get_user_data', params: {
+        'p_user_id': user.id,
+      });
 
-      if (response == null) {
+      // RPC returns an array, so get the first element
+      final userData = response != null && response.isNotEmpty ? response[0] : null;
+
+      if (userData == null) {
         // No profile exists, show setup
         _showFirstTimeSetup();
       } else {
         // Profile exists, check if name or age is missing
-        final name = response['name'];
-        final bioData = response['bio'] as Map<String, dynamic>? ?? {};
+        final name = userData['name'];
+        final bioData = userData['bio'] as Map<String, dynamic>? ?? {};
         final age = bioData['age'];
 
         if (name == null || name.toString().trim().isEmpty || age == null) {
@@ -135,6 +137,23 @@ class HomeState extends State<Home> {
       }
     } catch (e) {
       _logger.e('Error loading profile: $e');
+      
+      // Show user-friendly error message for network issues
+      if (e.toString().contains('Failed host lookup') || 
+          e.toString().contains('SocketException') ||
+          e.toString().contains('NetworkException')) {
+        _logger.w('Network connectivity issue detected. Please check your internet connection.');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Network error. Please check your internet connection and try again.'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+      
       setState(() => _isLoading = false);
     }
   }
@@ -155,10 +174,23 @@ class HomeState extends State<Home> {
       }
     } catch (e) {
       print('Error loading matches: $e'); // Debug print
+      
+      // Show user-friendly error message for network issues
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load matches: $e')),
-        );
+        if (e.toString().contains('Failed host lookup') || 
+            e.toString().contains('SocketException') ||
+            e.toString().contains('NetworkException')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Network error loading matches. Please check your internet connection.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to load matches: $e')),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -237,12 +269,14 @@ class HomeState extends State<Home> {
                   final user = supabase.auth.currentUser;
                   if (user == null) return;
 
-                  // Check if profile already exists
-                  final existingProfile = await supabase
-                      .from('people')
-                      .select()
-                      .eq('id', user.id)
-                      .maybeSingle();
+                  // Check if profile already exists using RPC function
+                  final existingProfileResponse = await supabase.rpc('get_user_data', params: {
+                    'p_user_id': user.id,
+                  });
+                  
+                  final existingProfile = existingProfileResponse != null && existingProfileResponse.isNotEmpty 
+                      ? existingProfileResponse[0] 
+                      : null;
 
                   if (existingProfile == null) {
                     // Insert new profile (phone will be set by auth system)
