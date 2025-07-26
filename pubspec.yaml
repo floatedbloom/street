@@ -21,6 +21,7 @@ dependencies:
   geolocator: ^14.0.2
   google_generative_ai: ^0.4.7
   logger: ^2.4.0
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:

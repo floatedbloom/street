@@ -42,7 +42,6 @@ class HomeState extends State<Home> {
   void initState() {
     super.initState();
     _loadUserProfile();
-    _startLocationTracking();
   }
 
   @override
@@ -56,7 +55,22 @@ class HomeState extends State<Home> {
   Future<void> _startLocationTracking() async {
     _logger.i('🏠 Starting location tracking from Home page...');
     
+    final user = supabase.auth.currentUser;
+    if (user == null || _userName.isEmpty) {
+      _logger.w('⚠️ Cannot start tracking - user not authenticated or profile incomplete');
+      return;
+    }
+    
+    final userProfile = UserProfile(
+      name: _userName,
+      age: int.tryParse(_userAge) ?? 25,
+      bio: _bioController.text,
+      interests: _selectedInterests.toList(),
+    );
+    
     bool started = await GeoService.startBackgroundTracking(
+      userId: user.id,
+      userProfile: userProfile,
       onNearbyUsers: (nearbyUsers) {
         setState(() {
           _nearbyUsers = nearbyUsers;
@@ -112,6 +126,9 @@ class HomeState extends State<Home> {
           
           // Load matches after profile is loaded
           _loadMatches();
+          
+          // Start location tracking after profile is loaded
+          _startLocationTracking();
         }
       }
     } catch (e) {
@@ -242,14 +259,18 @@ class HomeState extends State<Home> {
                     _isLoading = false;
                   });
 
+                  Navigator.of(context).pop();
+
+                  // Dispose controllers after dialog is closed
                   firstNameController.dispose();
                   lastNameController.dispose();
                   ageController.dispose();
 
-                  Navigator.of(context).pop();
-
                   // Load matches after successful profile setup
                   _loadMatches();
+                  
+                  // Start location tracking after successful profile setup
+                  _startLocationTracking();
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error saving profile: $e')),

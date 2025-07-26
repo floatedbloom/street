@@ -4,10 +4,19 @@ import 'pages/home.dart';
 import 'pages/otp_verification.dart';
 import 'auth/auth.dart';
 import 'auth/auth_gate.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Auth.intialize();
+  
+  // Initialize notifications
+  try {
+    await NotificationService.initialize();
+  } catch (e) {
+    print('Failed to initialize notifications: $e');
+  }
+  
   runApp(const MyApp());
 }
 
