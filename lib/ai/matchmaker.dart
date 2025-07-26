@@ -53,7 +53,7 @@ class MatchmakerService {
         throw Exception('GEMINI_API_KEY not found in .env file');
       }
       _model = GenerativeModel(
-        model: 'gemini-pro',
+        model: 'gemini-1.5-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(
           temperature: 0.3,
