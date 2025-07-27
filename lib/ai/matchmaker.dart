@@ -56,7 +56,7 @@ class MatchmakerService {
         model: 'gemini-1.5-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(
-          temperature: 0.4,
+          temperature: 0.7, // Increased from 0.4 for more flexible matching
           topK: 1,
           topP: 1,
           maxOutputTokens: 500,
@@ -248,7 +248,7 @@ class MatchmakerService {
         .toList();
     
     return '''
-Analyze the compatibility between these two users for a networking app:
+Analyze the compatibility between these two users for a social networking app. BE GENEROUS with matches - people are here to meet others!
 
 USER 1 (${user1.name}):
 - Age: ${user1.age}
@@ -262,28 +262,30 @@ USER 2 (${user2.name}):
 
 SHARED INTERESTS FOUND: ${sharedInterests.isNotEmpty ? sharedInterests.join(', ') : 'None'}
 
-Provide a detailed compatibility analysis that MUST mention:
-1. Specific shared interests by name (if any)
-2. Age compatibility (${user1.age} and ${user2.age} years old)
-3. Specific personality traits or activities from their bios
-4. Why they would have good conversations
+Look for compatibility in these ways:
+1. Direct shared interests (exact matches)
+2. Related/complementary interests (e.g., "startups" + "business", "music" + "concerts")
+3. Similar energy levels or life phases
+4. Age compatibility (within reasonable ranges)
+5. Personality compatibility from bios
 
 Respond in this exact JSON format:
 {
   "isMatch": true/false,
   "compatibilityScore": 0.85,
-  "reasoning": "Detailed explanation mentioning specific shared interests, age compatibility, and bio similarities",
+  "reasoning": "Detailed explanation mentioning specific connections and why they'd connect",
   "commonInterests": ["interest1", "interest2"]
 }
 
-IMPORTANT: 
-- Reasoning should be 80-120 characters and mention SPECIFIC similarities
-- If they share interests, mention them by name: "Both love hiking and photography"
-- If ages are close, mention it: "Similar ages (25 & 27)"
-- Reference specific bio content when possible
-- Score 0.7+ if they share 2+ interests or have very compatible bios
-- Score 0.8+ if they share 3+ interests and compatible ages
-- Only include actual shared interests in commonInterests array
+MATCHING GUIDELINES - BE INCLUSIVE:
+- Score 0.6+ for ANY shared interest or complementary interests
+- Score 0.7+ for multiple connections (shared interests, similar ages, compatible bios)
+- Score 0.8+ for strong compatibility across multiple areas
+- Ages within 10 years are compatible unless very different life stages
+- Similar ambitions/energy (e.g., both entrepreneurial) should match even with different specific interests
+- People seeking to expand their network should generally match unless completely incompatible
+- Reasoning should be 60-150 characters explaining the specific connection
+- Include both exact matches AND related interests in commonInterests
 ''';
   }
 

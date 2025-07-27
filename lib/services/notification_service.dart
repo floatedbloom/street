@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:logger/logger.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NotificationService {
   static final Logger _logger = Logger(
@@ -20,6 +22,7 @@ class NotificationService {
   static bool _initialized = false;
   static bool _initializing = false;
   static final Set<String> _sentMatchNotifications = <String>{};
+  static Timer? _matchCheckTimer;
 
   /// Initialize the notification service
   static Future<void> initialize() async {
@@ -120,9 +123,10 @@ class NotificationService {
     required String matchedUserName,
     required double compatibilityScore,
     required String reasoning,
+    String? matchId,
   }) async {
     // Create a unique key for this match to prevent duplicates
-    final String matchKey = '$matchedUserName:${compatibilityScore.toStringAsFixed(2)}';
+    final String matchKey = matchId ?? '$matchedUserName:${compatibilityScore.toStringAsFixed(2)}';
     
     if (_sentMatchNotifications.contains(matchKey)) {
       _logger.w('⚠️ Notification for $matchedUserName already sent, skipping duplicate');
@@ -271,4 +275,103 @@ class NotificationService {
 
     return result ?? false;
   }
-} 
+
+  /// Start periodic checking for new matches
+  static void startPeriodicMatchChecking() {
+    _logger.i('🔄 Starting periodic match checking...');
+    
+    // Cancel existing timer if any
+    _matchCheckTimer?.cancel();
+    
+    // Check every 2 minutes
+    _matchCheckTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+      checkForNewMatches();
+    });
+    
+    _logger.i('✅ Periodic match checking started (every 2 minutes)');
+  }
+
+  /// Stop periodic checking for new matches
+  static void stopPeriodicMatchChecking() {
+    _logger.i('🛑 Stopping periodic match checking...');
+    _matchCheckTimer?.cancel();
+    _matchCheckTimer = null;
+  }
+
+  /// Check for new matches and send notifications
+  static Future<void> checkForNewMatches() async {
+    try {
+      _logger.i('🔍 Checking for new matches to notify...');
+      
+      // Import needed dependencies at top of file
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+      
+      if (currentUser == null) {
+        _logger.w('⚠️ No authenticated user, skipping match check');
+        return;
+      }
+
+      // Get all matches for current user
+      final matchesResponse = await supabase.rpc('get_my_matches');
+      
+      if (matchesResponse == null || matchesResponse.isEmpty) {
+        _logger.d('📭 No matches found');
+        return;
+      }
+
+      final matches = List<Map<String, dynamic>>.from(matchesResponse);
+      _logger.i('📬 Found ${matches.length} total matches, checking for new ones...');
+
+      // Check each match to see if we've already notified about it
+      for (final match in matches) {
+        final matchId = match['id'] as String;
+        final createdAt = DateTime.parse(match['matched_at'] as String);
+        final now = DateTime.now();
+        final timeDiff = now.difference(createdAt);
+
+        // Only notify about matches created in the last 24 hours
+        if (timeDiff.inHours > 24) {
+          continue;
+        }
+
+        // Check if we've already sent a notification for this match
+        if (_sentMatchNotifications.contains(matchId)) {
+          continue;
+        }
+
+        // Get the other user's info
+        final currentUserId = currentUser.id;
+        final otherUserId = match['user_id_1'] == currentUserId 
+            ? match['user_id_2'] 
+            : match['user_id_1'];
+
+        // Get other user's profile
+        final otherUserResponse = await supabase.rpc('get_user_data', params: {
+          'p_user_id': otherUserId,
+        });
+
+        if (otherUserResponse != null && otherUserResponse.isNotEmpty) {
+          final otherUser = otherUserResponse[0];
+          final otherUserName = otherUser['name'] ?? 'Someone';
+          final compatibilityScore = (match['compatibility_score'] ?? 0.0).toDouble();
+          final reasoning = match['ai_reasoning'] ?? 'You have a new match!';
+
+          _logger.i('🔔 Sending notification for new match with $otherUserName');
+
+          // Send notification with match ID to prevent duplicates
+          await sendMatchNotification(
+            matchedUserName: otherUserName,
+            compatibilityScore: compatibilityScore,
+            reasoning: reasoning,
+            matchId: matchId,
+          );
+        }
+      }
+
+      _logger.i('✅ Finished checking for new matches');
+    } catch (e) {
+             _logger.e('❌ Error checking for new matches: $e');
+     }
+   }
+ } 

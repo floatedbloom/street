@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:logger/logger.dart';
 import '../ai/matchmaker.dart';
 import '../geo/geo.dart';
+import '../services/notification_service.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -43,6 +44,19 @@ class HomeState extends State<Home> {
   void initState() {
     super.initState();
     _loadUserProfile();
+    _checkForNewMatches();
+  }
+
+  Future<void> _checkForNewMatches() async {
+    try {
+      await Future.delayed(const Duration(seconds: 2)); // Brief delay to let things initialize
+      await NotificationService.checkForNewMatches();
+      
+      // Start periodic checking for new matches
+      NotificationService.startPeriodicMatchChecking();
+    } catch (e) {
+      _logger.e('Error checking for new matches: $e');
+    }
   }
 
   @override
@@ -50,6 +64,7 @@ class HomeState extends State<Home> {
     _bioController.dispose();
     _interestController.dispose();
     GeoService.stopBackgroundTracking();
+    NotificationService.stopPeriodicMatchChecking();
     super.dispose();
   }
 

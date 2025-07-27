@@ -258,12 +258,31 @@ class GeoService {
         _logger.i('💝 Compatibility: ${(matchResult.compatibilityScore * 100).toStringAsFixed(1)}%');
         _logger.i('🧠 AI Reasoning: ${matchResult.reasoning}');
         
+        // Get the match ID from database for consistent notifications
+        String? matchId;
+        try {
+          final matches = await MatchmakerService.getUserMatches(_currentUserId!);
+          // Find the most recent match with this user
+          for (final match in matches) {
+            final user1Id = match['user_id_1'];
+            final user2Id = match['user_id_2'];
+            if ((user1Id == _currentUserId && user2Id == nearbyUser['id']) ||
+                (user2Id == _currentUserId && user1Id == nearbyUser['id'])) {
+              matchId = match['id'];
+              break;
+            }
+          }
+        } catch (e) {
+          _logger.w('⚠️ Could not get match ID for notification: $e');
+        }
+        
         // Send notification for the new match
         try {
           await NotificationService.sendMatchNotification(
             matchedUserName: nearbyUserProfile.name,
             compatibilityScore: matchResult.compatibilityScore,
             reasoning: matchResult.reasoning,
+            matchId: matchId,
           );
         } catch (e) {
           _logger.e('❌ Failed to send match notification: $e');
