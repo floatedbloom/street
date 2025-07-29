@@ -133,23 +133,34 @@ class HomeState extends State<Home> {
 
       // RPC returns an array, so get the first element
       final userData = response != null && response.isNotEmpty ? response[0] : null;
+      
+      _logger.d('🔍 User data retrieved: $userData');
 
       if (userData == null) {
         // No profile exists, show setup
+        _logger.i('📝 No profile found, showing first-time setup');
         _showFirstTimeSetup();
       } else {
-        // Profile exists, check if name or age is missing
+        // Profile exists, check if essential info is complete
         final name = userData['name'];
         final bioData = userData['bio'] as Map<String, dynamic>? ?? {};
         final age = bioData['age'];
 
-        if (name == null || name.toString().trim().isEmpty || age == null) {
+        _logger.d('👤 Profile data - Name: $name, Age: $age, Bio: $bioData');
+
+        // Show setup only if name is missing/empty OR age is missing/invalid
+        final bool nameExists = name != null && name.toString().trim().isNotEmpty;
+        final bool ageExists = age != null && age is int && age > 0;
+        
+        if (!nameExists || !ageExists) {
           // Essential info missing, show setup
+          _logger.i('⚠️ Essential info missing - Name exists: $nameExists, Age exists: $ageExists');
           _showFirstTimeSetup();
         } else {
           // Complete profile, load data
+          _logger.i('✅ Complete profile found, loading data');
           setState(() {
-            _userName = name;
+            _userName = name.toString();
             _userAge = age.toString();
             _bioController.text = bioData['bio_text'] ?? '';
             if (bioData['interests'] != null) {
